@@ -1101,7 +1101,7 @@
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
-        .filter(function(x){return x.gc.pass&&(!q||(x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1);});
+        .filter(function(x){var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
@@ -1251,8 +1251,26 @@
         // Transform new API response format
         var items=data.data&&data.data.items?data.data.items:[];
         if(items.length){
-          CATALOG=items;state.catalogSource="manlab";state.catalogUpdatedAt=nowISO();
-          cb(true,"Đã cập nhật "+items.length+" đối tượng từ GitHub API ManLab.");
+          // Transform API fields to app format
+          var transformed=items.map(function(item){
+            return {
+              id:item.ID,
+              ten:item.TenPhuongTienDo||'',
+              tenTA:item.KyHieu||'',
+              linhVuc:item.TenYeuCauThucHien||'',
+              dichVu:item.MaYeuCauThucHien||'',
+              phamVi:item.GhiChu||'',
+              mpelod:'—',
+              cmcMax:'—',
+              cmcDvt:'—',
+              quyTrinh:item.QuyTrinh||'',
+              nangLucCode:item.KyHieu||'',
+              trangThaiPTD:item.TrangThaiNTP||'0',
+              nguoiThucHien:item.TenNguoiThucHien||''
+            };
+          });
+          CATALOG=transformed;state.catalogSource="manlab";state.catalogUpdatedAt=nowISO();
+          cb(true,"Đã cập nhật "+transformed.length+" đối tượng từ GitHub API ManLab.");
         }else{cb(false,"ManLab trả về danh mục rỗng.");}
       })
       .catch(function(err){
