@@ -491,7 +491,7 @@
     var reasons=[],isHC=item.dichVu==="HC";
     var approvedStates=["Đã duyệt","ĐN LĐV duyệt"]; // đối tượng đã qua duyệt/đề nghị Lãnh đạo Viện duyệt
     var g1=approvedStates.indexOf(item.trangThaiPTD)>-1; if(!g1)reasons.push("G1: PTĐ chưa được duyệt (hiện: "+(item.trangThaiPTD||"—")+")");
-    var g2=!isHC||(item.cmcMax>0&&item.cmcDvt); if(isHC&&!g2)reasons.push("G2: Thiếu CMC hợp lệ (CMC>0 và có ĐVT) — không lập được Bản công bố NQ 66.18");
+    var cmcVal=String(item.cmcMax||"").trim(); var g2=!isHC||(cmcVal!==""&&cmcVal!=="—"); if(isHC&&!g2)reasons.push("G2: Thiếu CMC hợp lệ — không lập được Bản công bố NQ 66.18");
     var g3=!!item.quyTrinh; if(!g3)reasons.push("G3: Chưa liên kết quy trình thực hiện");
     var g5=!!item.phamVi; if(!g5)reasons.push("G5: Thiếu phạm vi áp dụng");
     var g6=!!item.nangLucCode; if(!g6)reasons.push("G6: Chưa gán năng lực pháp lý (ĐK105/ĐK107/N383/VILAS/Giấy KHCN)");
@@ -719,7 +719,7 @@
     return h;
   }
   function pickerRow(item,idx,ok,reasons){
-    var cap=item.mpelod||((item.cmcMax||"")+" "+(item.cmcDvt||"")).trim();
+    var cap=item.dichVu==="HC"&&item.cmcMax?((item.cmcMax+" "+(item.cmcDvt||"")).trim()):(item.mpelod||"—");
     var chk=ok?'<span class="pchk"><input type="checkbox" data-pchk="'+idx+'" '+(state.pickSel[idx]?"checked":"")+'></span>':'';
     return '<div class="pitem'+(ok?"":" fail")+'">'+chk+'<div class="pinfo"><b>'+esc(item.ten)+'</b> — '+esc(item.linhVuc)+' · '+esc(item.dichVu)+' · <span class="ptags">'+esc(item.trangThaiPTD||"")+'</span><br>'+
       '<span class="ptags">Phạm vi: '+esc(item.phamVi||"—")+' · MPE/CMC: '+esc(cap||"—")+' · Quy trình: '+esc((item.quyTrinh||"").split(" (")[0]||"—")+'</span>'+
@@ -1260,9 +1260,9 @@
               linhVuc:item.TenYeuCauThucHien||'',
               dichVu:item.MaYeuCauThucHien||'',
               phamVi:item.GhiChu||'',
-              mpelod:'—',
-              cmcMax:'—',
-              cmcDvt:'—',
+              mpelod:item.MPE_LOD||'',   // MPE / LOD (field riêng trong DB ManLab)
+              cmcMax:item.CMC||'',       // CMC (field riêng trong DB ManLab)
+              cmcDvt:'',                 // CMC đã gồm đơn vị trong 1 field
               quyTrinh:item.QuyTrinh||'',
               nangLucCode:item.KyHieu||'',
               trangThaiPTD:item.TrangThaiNTP||'0',
