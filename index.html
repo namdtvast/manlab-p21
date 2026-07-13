@@ -508,15 +508,15 @@
   }
 
   /* ---------- Line schemas ---------- */
-  var DV={kiemdinh:"Kiểm định",hieuchuan:"Hiệu chuẩn",thunghiem:"Thử nghiệm"};
-  var DVREV={"KĐ":"kiemdinh","HC":"hieuchuan","TN":"thunghiem"};
+  var DV={kiemdinh:"Kiểm định",hieuchuan:"Hiệu chuẩn",thunghiem:"Thử nghiệm",quantrac:"Quan trắc"};
+  var DVREV={"KĐ":"kiemdinh","HC":"hieuchuan","TN":"thunghiem","QTMT":"quantrac"};
   var NHOM={hientruong:"Đo đạc tại hiện trường",laymau:"Lấy & bảo quản mẫu",phantich:"Xử lý & phân tích mẫu"};
   var KQ={dapung:"Đáp ứng",khong:"Không đáp ứng",dieuchinh:"Điều chỉnh"};
 
   function blankLine(loai){
     // Cả DL và QTMT dùng chung cấu trúc dòng (bảng Năng lực + picker giống nhau).
     // Người TH để trống — chỉ điền tự động từ DB ManLab (cột Người tham gia mặc định) khi chọn đối tượng từ danh mục.
-    return {id:rid(),dichVu:"kiemdinh",ten:"",linhVuc:"",phamVi:"",ccx:"",quyTrinh:"",nguoiTH:"",ghiChu:"",kq:"dapung",lyDo:"",bangChung:"",bcFileName:"",bcFileData:"",bcFileType:"",linked:false,catalogRef:""};
+    return {id:rid(),dichVu:loai==="QTMT"?"quantrac":"kiemdinh",ten:"",linhVuc:"",phamVi:"",ccx:"",quyTrinh:"",nguoiTH:"",ghiChu:"",kq:"dapung",lyDo:"",bangChung:"",bcFileName:"",bcFileData:"",bcFileType:"",linked:false,catalogRef:""};
   }
   function rid(){return"L"+Math.floor(performance.now()*1000%1e9);}
 
@@ -696,7 +696,9 @@
   function catalogPicker(r){
     var q=state.pickerQ.toLowerCase();
     var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item)};})
-      .filter(function(x){if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;});
+      .filter(function(x){
+        if(r.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false; // Hồ sơ QTMT chỉ lấy Đối tượng có Dịch vụ = QTMT (Quan trắc)
+        if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;});
     var pass=scored.filter(function(x){return x.gc.pass;});
     var fail=scored.filter(function(x){return !x.gc.pass;});
     var selCount=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];}).length;
@@ -1109,9 +1111,9 @@
     if(t.dataset.action==="closepicker"){state.pickerFor=null;state.pickSel={};renderMain();return;}
     if(t.dataset.action==="togglefail"){state.pickerShowFail=!state.pickerShowFail;renderMain();return;}
     if(t.dataset.action==="selall"){
-      var q=state.pickerQ.toLowerCase();
+      var q=state.pickerQ.toLowerCase();var rSel=cur();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
-        .filter(function(x){var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
+        .filter(function(x){if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
