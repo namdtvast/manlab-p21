@@ -129,6 +129,17 @@
   .picker .prow{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;align-items:center}
   .picker input[type=text]{flex:1;min-width:180px;padding:.4rem .55rem;border:1px solid var(--line-strong);border-radius:4px}
   .plist{display:flex;flex-direction:column;gap:.35rem;max-height:320px;overflow:auto}
+  .ptab-wrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+  table.ptbl{width:100%;border-collapse:collapse;font-size:.78rem;min-width:840px;table-layout:fixed}
+  table.ptbl th{background:var(--navy);color:#fff;font-weight:600;font-size:.66rem;padding:.45rem .4rem;text-align:left;position:sticky;top:0;z-index:1}
+  table.ptbl td{border-bottom:1px solid var(--line);padding:.4rem .4rem;vertical-align:top;word-break:break-word}
+  table.ptbl tbody tr:not(.greason-row):hover{background:var(--teal-soft)}
+  table.ptbl tr.fail td{background:var(--ground);color:var(--ink-soft)}
+  table.ptbl .pname{font-weight:600}
+  table.ptbl .ptags{color:var(--muted)}
+  table.ptbl .pcell-chk{text-align:center}
+  table.ptbl .pcell-chk input{width:1.05rem;height:1.05rem;cursor:pointer}
+  table.ptbl .greason{font-size:.7rem;color:var(--bad)}
   .pitem{background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:.5rem .6rem;display:flex;justify-content:space-between;gap:.6rem;align-items:center;flex-wrap:wrap}
   .pitem .pinfo{font-size:.78rem}
   .pitem .pinfo b{font-size:.82rem}
@@ -709,23 +720,41 @@
         '<span class="sel-count">Đã chọn: '+selCount+'</span>'+
         '<button class="btn sm" data-action="addselected" '+(selCount?"":"disabled")+'>Thêm '+selCount+' đối tượng đã chọn</button>'+
       '</div>'+
-      '<div class="plist">';
-    if(!pass.length)h+='<p class="subnote">Không có PTĐ đủ điều kiện khớp tìm kiếm.</p>';
-    h+=pass.map(function(x){return pickerRow(x.item,x.idx,true,[]);}).join("");
-    h+='</div>'+
-      '<p style="margin-top:.6rem"><button class="picktoggle" data-action="togglefail">'+(state.pickerShowFail?"Ẩn":"Hiện")+' '+fail.length+' PTĐ chưa đủ điều kiện (LK4)</button></p>';
-    if(state.pickerShowFail)h+='<div class="plist">'+fail.map(function(x){return pickerRow(x.item,x.idx,false,x.gc.reasons);}).join("")+'</div>';
+      '';
+    h+=pickerTable(pass,true);
+    h+='<p style="margin-top:.6rem"><button class="picktoggle" data-action="togglefail">'+(state.pickerShowFail?"Ẩn":"Hiện")+' '+fail.length+' PTĐ chưa đủ điều kiện (LK4)</button></p>';
+    if(state.pickerShowFail)h+=pickerTable(fail,false);
     h+='</div>';
+    return h;
+  }
+  function pickerTable(list,ok){
+    if(!list.length)return '<p class="subnote">'+(ok?"Không có PTĐ đủ điều kiện khớp tìm kiếm.":"Không có PTĐ chưa đủ điều kiện.")+'</p>';
+    var cols=["","Tên đối tượng","Lĩnh vực","DV","Phạm vi đo","MPE/CMC","Quy trình","Trạng thái",""];
+    var widths=["36px","220px","130px","52px","150px","120px","170px","120px","82px"];
+    var h='<div class="ptab-wrap"><table class="ptbl"><colgroup>'+
+      widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>'+
+      cols.map(function(c){return "<th>"+c+"</th>";}).join("")+'</tr></thead><tbody>';
+    h+=list.map(function(x){return pickerRow(x.item,x.idx,ok,ok?[]:x.gc.reasons);}).join("");
+    h+='</tbody></table></div>';
     return h;
   }
   function pickerRow(item,idx,ok,reasons){
     var cap=item.dichVu==="HC"&&item.cmcMax?((item.cmcMax+" "+(item.cmcDvt||"")).trim()):(item.mpelod||"—");
-    var chk=ok?'<span class="pchk"><input type="checkbox" data-pchk="'+idx+'" '+(state.pickSel[idx]?"checked":"")+'></span>':'';
-    return '<div class="pitem'+(ok?"":" fail")+'">'+chk+'<div class="pinfo"><b>'+esc(item.ten)+'</b> — '+esc(item.linhVuc)+' · '+esc(item.dichVu)+' · <span class="ptags">'+esc(item.trangThaiPTD||"")+'</span><br>'+
-      '<span class="ptags">Phạm vi: '+esc(item.phamVi||"—")+' · MPE/CMC: '+esc(cap||"—")+' · Quy trình: '+esc((item.quyTrinh||"").split(" (")[0]||"—")+'</span>'+
-      (reasons&&reasons.length?'<div class="greason">'+reasons.map(esc).join("<br>")+'</div>':'')+'</div>'+
-      (ok?'<button class="btn sm" data-pick="'+idx+'">Chọn</button>':'<button class="btn sm" disabled>Không đủ điều kiện</button>')+
-    '</div>';
+    var chk=ok?'<input type="checkbox" data-pchk="'+idx+'" '+(state.pickSel[idx]?"checked":"")+'>':'<input type="checkbox" disabled>';
+    var act=ok?'<button class="btn sm" data-pick="'+idx+'">Chọn</button>':'<span class="ptags" style="color:var(--bad);font-weight:700">LK4</span>';
+    var h='<tr class="'+(ok?"":"fail")+'">'+
+      '<td class="pcell-chk">'+chk+'</td>'+
+      '<td class="pname">'+esc(item.ten)+'</td>'+
+      '<td>'+esc(item.linhVuc)+'</td>'+
+      '<td>'+esc(item.dichVu)+'</td>'+
+      '<td>'+esc(item.phamVi||"—")+'</td>'+
+      '<td>'+esc(cap||"—")+'</td>'+
+      '<td>'+esc((item.quyTrinh||"").split(" (")[0]||"—")+'</td>'+
+      '<td>'+esc(item.trangThaiPTD||"")+'</td>'+
+      '<td class="pcell-act">'+act+'</td>'+
+    '</tr>';
+    if(!ok&&reasons&&reasons.length)h+='<tr class="fail greason-row"><td></td><td colspan="8"><div class="greason">'+reasons.map(esc).join("<br>")+'</div></td></tr>';
+    return h;
   }
   function addCatalogItem(r,item){
     var line=blankLine(r.loai);
