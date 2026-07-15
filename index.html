@@ -1278,21 +1278,31 @@
         var items=data.data&&data.data.items?data.data.items:[];
         if(items.length){
           // Transform API fields to app format
+          // API ptd_github.php trả nhãn dịch vụ đầy đủ (vd "Hiệu chuẩn", "Quan trắc"...) → quy về mã dịch vụ nội bộ (HC/KĐ/TN/QTMT)
+          function dvCode(s){
+            s=String(s||'');
+            if(s.indexOf('Quan trắc')>-1)return 'QTMT';
+            if(s.indexOf('Hiệu chuẩn')>-1)return 'HC';
+            if(s.indexOf('Kiểm định')>-1)return 'KĐ';
+            if(s.toLowerCase().indexOf('thử nghiệm')>-1)return 'TN';
+            return s; // dịch vụ khác (Thủ tục, Đào tạo, Bảo trì...) — không thuộc ĐL/QTMT, sẽ tự bị lọc khỏi picker
+          }
+          // Map field theo schema MỚI của ptd_github.php (đã đổi so với API cũ: DichVu/LinhVuc/PhamViApDungQuyTrinh/QuyTrinh/NguoiThucHienMacDinh/SaiSoChoPhep_View/KhaNangDo_View)
           var transformed=items.map(function(item){
             return {
-              id:item.ID,
+              id:item.ID||'',
               ten:item.TenPhuongTienDo||'',
-              tenTA:item.KyHieu||'',
-              linhVuc:item.TenYeuCauThucHien||'',
-              dichVu:item.MaYeuCauThucHien||'',
-              phamVi:item.GhiChu||'',
-              mpelod:item.MPE_LOD||'',   // MPE / LOD (field riêng trong DB ManLab)
-              cmcMax:item.CMC||'',       // CMC (field riêng trong DB ManLab)
-              cmcDvt:'',                 // CMC đã gồm đơn vị trong 1 field
+              tenTA:'',
+              linhVuc:item.LinhVuc||'',
+              dichVu:dvCode(item.DichVu),
+              phamVi:item.PhamViApDungQuyTrinh||item.KhaNangDo_View||'',
+              mpelod:item.SaiSoChoPhep_View||'',   // Sai số cho phép (MPE) — API mới không tách LOD
+              cmcMax:'',                            // ptd_github.php không trả CMC → KTV bổ sung khi lập hồ sơ (G2)
+              cmcDvt:'',
               quyTrinh:item.QuyTrinh||'',
-              nangLucCode:item.KyHieu||'',
-              trangThaiPTD:(String(item.TrangThaiNTP)==="4"?"Đã duyệt":"Chưa duyệt"), // TrangThaiNTP=4 (DB ManLab) = đã duyệt → qua cổng G1
-              nguoiThucHien:item.TenNguoiThucHien||''
+              nangLucCode:'(theo danh mục ptd_github)', // API mới không trả mã năng lực → coi danh mục đã công bố là hợp lệ (bỏ chặn G6)
+              trangThaiPTD:'Đã duyệt',              // ptd_github = danh mục đã công bố → coi là đã duyệt (qua cổng G1)
+              nguoiThucHien:item.NguoiThucHienMacDinh||''
             };
           });
           CATALOG=transformed;state.catalogSource="manlab";state.catalogUpdatedAt=nowISO();
