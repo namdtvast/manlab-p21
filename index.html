@@ -102,7 +102,7 @@
   .subnote{font-size:.76rem;color:var(--muted);margin-top:.3rem}
   /* Child table */
   .ctab-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
-  table.ct{width:100%;border-collapse:collapse;font-size:.8rem;min-width:1520px;table-layout:fixed}
+  table.ct{width:100%;border-collapse:collapse;font-size:.8rem;min-width:1560px;table-layout:fixed}
   table.ct th{background:var(--navy);color:#fff;font-weight:600;font-size:.68rem;padding:.5rem .45rem;text-align:left;position:sticky;top:0;
     white-space:normal;line-height:1.2;vertical-align:middle}
   table.ct td{border-bottom:1px solid var(--line);padding:.35rem .4rem;vertical-align:top;overflow:visible}
@@ -122,6 +122,10 @@
   .evdel{border:0;background:transparent;color:var(--bad);cursor:pointer;font-size:.85rem;font-weight:700;flex:0 0 auto}
   .kq-dapung{background:var(--good-bg)} .kq-khong{background:var(--bad-bg)} .kq-dieuchinh{background:var(--warn-bg)}
   .rowdel{border:0;background:transparent;color:var(--bad);cursor:pointer;font-size:1rem;font-weight:700}
+  tr.rowerr td{background:var(--bad-bg)}
+  tr.rowerr td:first-child{border-left:3px solid var(--bad)}
+  .sttcell{text-align:center;color:var(--ink-soft);font-weight:600}
+  tr.rowerr .sttcell{color:var(--bad)}
   .ct-foot{padding:.5rem;background:var(--paper)}
   .linkbadge{display:inline-block;font-size:.6rem;font-weight:700;color:var(--teal);background:var(--teal-soft);
     border-radius:3px;padding:0 .3rem;margin-top:.2rem;white-space:nowrap}
@@ -681,11 +685,18 @@
     h+='<div class="card"><h3>Năng lực đề nghị công bố/ thông báo của Đối tượng — '+r.lines.length+' đối tượng<span class="btnrow">'+
       (dis?"":'<button class="btn sm" data-action="openpicker">🔗 Chọn danh mục Đối tượng ('+(r.loai==="QTMT"?"QTMT":"PTĐ")+') từ Danh mục Phương tiện đo</button>')+'</span></h3>';
     h+='<div class="ctab-wrap"><table class="ct"><colgroup>';
-    var widths=["96px","210px","120px","130px","150px","150px","160px","96px","118px","150px","150px","40px"];
+    var widths=["44px","96px","210px","120px","130px","150px","150px","160px","96px","118px","150px","150px","40px"];
     h+=widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>';
-    var cols=["Dịch vụ","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)","Ghi chú","Kết quả","Lý do","Bằng chứng",""];
+    var cols=["Số TT","Dịch vụ","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)","Ghi chú","Kết quả","Lý do","Bằng chứng",""];
     h+=cols.map(function(c){return"<th>"+c+"</th>";}).join("")+"</tr></thead><tbody>";
-    r.lines.forEach(function(l,i){h+=lineRow(r,l,i,dis);});
+    // Sắp xếp hiển thị theo nhóm Dịch vụ: Kiểm định / Hiệu chuẩn / Thử nghiệm / Quan trắc; giữ nguyên chỉ số gốc để không phá dữ liệu binding
+    var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
+    var order=r.lines.map(function(l,i){return i;}).sort(function(a,b){
+      var oa=dvOrder[r.lines[a].dichVu];if(oa===undefined)oa=99;
+      var ob=dvOrder[r.lines[b].dichVu];if(ob===undefined)ob=99;
+      return oa!==ob?oa-ob:a-b;
+    });
+    order.forEach(function(i,pos){h+=lineRow(r,r.lines[i],i,dis,pos+1);});
     h+="</tbody></table></div><p class=\"subnote\">Dòng có nhãn 🔗 đã liên kết Danh mục PTĐ — dữ liệu được chụp snapshot tại thời điểm thêm (Mục 4, Mục 8).</p></div>";
 
     // rules
@@ -772,15 +783,18 @@
     r.lines.push(line);
   }
 
-  function lineRow(r,l,i,dis){
+  function lineRow(r,l,i,dis,stt){
     function inp(k){return '<input value="'+esc(l[k])+'" data-lf="'+k+'" data-li="'+i+'" '+dis+'>';}
     function sel(k,map){return '<select data-lf="'+k+'" data-li="'+i+'" '+dis+'>'+Object.keys(map).map(function(v){return '<option value="'+v+'" '+(l[k]===v?"selected":"")+'>'+map[v]+'</option>';}).join("")+'</select>';}
     var del=dis?"":'<button class="rowdel" data-del="'+i+'" title="Xóa dòng">✕</button>';
     var kqcls="kq-"+l.kq;
     var linkTag=l.linked?'<span class="linkbadge">🔗 Danh mục PTĐ</span>':'';
     var ev=evidenceCell(l,i,dis);
+    var gaps=lineGaps(r,l);
+    var trcls=gaps.length?' class="rowerr"':'';
+    var trtitle=gaps.length?' title="Thiếu: '+esc(gaps.join(", "))+'"':'';
     // Cả DL và QTMT dùng chung hàng bảng Năng lực (cấu trúc Đối tượng)
-    return '<tr><td>'+sel("dichVu",DV)+'</td><td>'+inp("ten")+linkTag+'</td><td>'+inp("linhVuc")+'</td><td>'+inp("phamVi")+'</td><td>'+inp("ccx")+'</td><td>'+inp("quyTrinh")+'</td><td>'+inp("nguoiTH")+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+inp("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
+    return '<tr'+trcls+trtitle+'><td class="sttcell">'+stt+'</td><td>'+sel("dichVu",DV)+'</td><td>'+inp("ten")+linkTag+'</td><td>'+inp("linhVuc")+'</td><td>'+inp("phamVi")+'</td><td>'+inp("ccx")+'</td><td>'+inp("quyTrinh")+'</td><td>'+inp("nguoiTH")+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+inp("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
   }
   function evidenceCell(l,i,dis){
     var has=l.bcFileName||l.bcFileData;
