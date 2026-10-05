@@ -689,15 +689,18 @@
     h+=widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>';
     var cols=["Số TT","Dịch vụ","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)","Ghi chú","Kết quả","Lý do","Bằng chứng",""];
     h+=cols.map(function(c){return"<th>"+c+"</th>";}).join("")+"</tr></thead><tbody>";
-    // Sắp xếp hiển thị: (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ);
-    // (3) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình. Giữ nguyên chỉ số gốc để không phá dữ liệu binding
+    // Sắp xếp hiển thị: (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) trong Kiểm định: Kiểm định trực tiếp trước, NTP (nhà thầu phụ) sau;
+    // (3) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ); (4) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình.
+    // Giữ nguyên chỉ số gốc để không phá dữ liệu binding
     var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
     function quyTrinhNo(q){var m=String(q||"").match(/\d+/);return m?+m[0]:Infinity;}
+    function isNtp(l){return !!(l.ntp||/\bNTP\b|Nhà thầu phụ/i.test(String(l.quyTrinh||"")));} // dòng cũ chưa có cờ ntp → nhận diện theo quy trình
     var order=r.lines.map(function(l,i){return i;}).sort(function(a,b){
       var la=r.lines[a],lb=r.lines[b];
       var oa=dvOrder[la.dichVu];if(oa===undefined)oa=99;
       var ob=dvOrder[lb.dichVu];if(ob===undefined)ob=99;
       if(oa!==ob)return oa-ob;
+      if(oa===0){var na=isNtp(la)?1:0,nb=isNtp(lb)?1:0;if(na!==nb)return na-nb;}
       var c=String(la.linhVuc||"").localeCompare(String(lb.linhVuc||""),"vi");if(c)return c;
       var qa=quyTrinhNo(la.quyTrinh),qb=quyTrinhNo(lb.quyTrinh);
       if(qa!==qb)return qa<qb?-1:1;
@@ -788,6 +791,7 @@
     line.ccx=item.dichVu==="HC"&&item.cmcMax?((item.cmcMax+" "+item.cmcDvt).trim()):item.mpelod;
     line.quyTrinh=(item.quyTrinh||"").split(" (")[0];
     line.nguoiTH=item.nguoiThucHien||"";line.catalogRef=item.ten;line.linked=true; // Người TH = Người tham gia (mặc định) từ DB ManLab
+    line.ntp=!!item.ntp;
     r.lines.push(line);
   }
 
@@ -1325,7 +1329,8 @@
               quyTrinh:item.QuyTrinh||'',
               nangLucCode:'(theo danh mục ptd_github)', // API mới không trả mã năng lực → coi danh mục đã công bố là hợp lệ (bỏ chặn G6)
               trangThaiPTD:'Đã duyệt',              // ptd_github = danh mục đã công bố → coi là đã duyệt (qua cổng G1)
-              nguoiThucHien:item.NguoiThucHienMacDinh||''
+              nguoiThucHien:item.NguoiThucHienMacDinh||'',
+              ntp:/Nhà thầu phụ/i.test(String(item.DichVu||'')) // nhãn gốc "Kiểm định (Nhà thầu phụ)" → nhóm NTP trong Kiểm định
             };
           });
           CATALOG=transformed;state.catalogSource="manlab";state.catalogUpdatedAt=nowISO();
