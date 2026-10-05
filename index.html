@@ -689,12 +689,20 @@
     h+=widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>';
     var cols=["Số TT","Dịch vụ","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)","Ghi chú","Kết quả","Lý do","Bằng chứng",""];
     h+=cols.map(function(c){return"<th>"+c+"</th>";}).join("")+"</tr></thead><tbody>";
-    // Sắp xếp hiển thị theo nhóm Dịch vụ: Kiểm định / Hiệu chuẩn / Thử nghiệm / Quan trắc; giữ nguyên chỉ số gốc để không phá dữ liệu binding
+    // Sắp xếp hiển thị: (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ);
+    // (3) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình. Giữ nguyên chỉ số gốc để không phá dữ liệu binding
     var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
+    function quyTrinhNo(q){var m=String(q||"").match(/\d+/);return m?+m[0]:Infinity;}
     var order=r.lines.map(function(l,i){return i;}).sort(function(a,b){
-      var oa=dvOrder[r.lines[a].dichVu];if(oa===undefined)oa=99;
-      var ob=dvOrder[r.lines[b].dichVu];if(ob===undefined)ob=99;
-      return oa!==ob?oa-ob:a-b;
+      var la=r.lines[a],lb=r.lines[b];
+      var oa=dvOrder[la.dichVu];if(oa===undefined)oa=99;
+      var ob=dvOrder[lb.dichVu];if(ob===undefined)ob=99;
+      if(oa!==ob)return oa-ob;
+      var c=String(la.linhVuc||"").localeCompare(String(lb.linhVuc||""),"vi");if(c)return c;
+      var qa=quyTrinhNo(la.quyTrinh),qb=quyTrinhNo(lb.quyTrinh);
+      if(qa!==qb)return qa<qb?-1:1;
+      c=String(la.quyTrinh||"").localeCompare(String(lb.quyTrinh||""),"vi");if(c)return c;
+      return a-b;
     });
     order.forEach(function(i,pos){h+=lineRow(r,r.lines[i],i,dis,pos+1);});
     h+="</tbody></table></div><p class=\"subnote\">Dòng có nhãn 🔗 đã liên kết Danh mục PTĐ — dữ liệu được chụp snapshot tại thời điểm thêm (Mục 4, Mục 8).</p></div>";
