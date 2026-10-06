@@ -499,15 +499,38 @@
     if((l.kq==="khong"||l.kq==="dieuchinh")&&!hasEvidence)g.push("Bằng chứng: ảnh chụp màn hình / tài liệu (bắt buộc — BR10)");
     return g;
   }
-  // Mỗi mục thiếu: {t: nội dung, line: chỉ số dòng năng lực (null nếu là trường bảng cha)}
+  // Thứ tự hiển thị bảng Năng lực (trả về mảng chỉ số gốc theo thứ tự hiển thị; chỉ số gốc dùng cho binding và id dòng):
+  // (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) trong Kiểm định: Kiểm định trực tiếp trước, NTP (nhà thầu phụ) sau;
+  // (3) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ); (4) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình.
+  function lineDisplayOrder(r){
+    var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
+    function quyTrinhNo(q){var m=String(q||"").match(/\d+/);return m?+m[0]:Infinity;}
+    function isNtp(l){return !!(l.ntp||/\bNTP\b|Nhà thầu phụ/i.test(String(l.quyTrinh||"")));} // dòng cũ chưa có cờ ntp → nhận diện theo quy trình
+    return r.lines.map(function(l,i){return i;}).sort(function(a,b){
+      var la=r.lines[a],lb=r.lines[b];
+      var oa=dvOrder[la.dichVu];if(oa===undefined)oa=99;
+      var ob=dvOrder[lb.dichVu];if(ob===undefined)ob=99;
+      if(oa!==ob)return oa-ob;
+      if(oa===0){var na=isNtp(la)?1:0,nb=isNtp(lb)?1:0;if(na!==nb)return na-nb;}
+      var c=String(la.linhVuc||"").localeCompare(String(lb.linhVuc||""),"vi");if(c)return c;
+      var qa=quyTrinhNo(la.quyTrinh),qb=quyTrinhNo(lb.quyTrinh);
+      if(qa!==qb)return qa<qb?-1:1;
+      c=String(la.quyTrinh||"").localeCompare(String(lb.quyTrinh||""),"vi");if(c)return c;
+      return a-b;
+    });
+  }
+
+  // Mỗi mục thiếu: {t: nội dung, line: chỉ số gốc của dòng năng lực (null nếu là trường bảng cha)}
+  // Số "Dòng N" lấy theo Số TT hiển thị trong bảng để người dùng đối chiếu trực tiếp
   function gapItems(r){
     var out=[];
+    var sttOf={};lineDisplayOrder(r).forEach(function(i,p){sttOf[i]=p+1;});
     if(!(r.coQuanTiepNhan||"").trim())out.push({t:"Cơ quan tiếp nhận"});
     if(!r.toChuc.trim())out.push({t:"Tên tổ chức"});
     if(!r.diaChi.trim())out.push({t:"Địa chỉ"});
     if(!r.daiDien.trim())out.push({t:"Người đại diện pháp luật"});
     if(r.loai==="DL"&&!(r.diaDiem||"").trim())out.push({t:"Địa điểm thực hiện hoạt động"});
-    r.lines.forEach(function(l,i){var g=lineGaps(r,l);if(g.length)out.push({t:"Dòng "+(i+1)+" ("+(l.ten||l.thongSo||"chưa đặt tên")+"): "+g.join(", "),line:i});});
+    lineDisplayOrder(r).forEach(function(i){var l=r.lines[i];var g=lineGaps(r,l);if(g.length)out.push({t:"Dòng "+sttOf[i]+" ("+(l.ten||l.thongSo||"chưa đặt tên")+"): "+g.join(", "),line:i});});
     return out;
   }
   function recordGaps(r){
@@ -702,24 +725,7 @@
     h+=widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>';
     var cols=["Số TT","Dịch vụ","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)","Ghi chú","Kết quả","Lý do","Bằng chứng",""];
     h+=cols.map(function(c){return"<th>"+c+"</th>";}).join("")+"</tr></thead><tbody>";
-    // Sắp xếp hiển thị: (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) trong Kiểm định: Kiểm định trực tiếp trước, NTP (nhà thầu phụ) sau;
-    // (3) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ); (4) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình.
-    // Giữ nguyên chỉ số gốc để không phá dữ liệu binding
-    var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
-    function quyTrinhNo(q){var m=String(q||"").match(/\d+/);return m?+m[0]:Infinity;}
-    function isNtp(l){return !!(l.ntp||/\bNTP\b|Nhà thầu phụ/i.test(String(l.quyTrinh||"")));} // dòng cũ chưa có cờ ntp → nhận diện theo quy trình
-    var order=r.lines.map(function(l,i){return i;}).sort(function(a,b){
-      var la=r.lines[a],lb=r.lines[b];
-      var oa=dvOrder[la.dichVu];if(oa===undefined)oa=99;
-      var ob=dvOrder[lb.dichVu];if(ob===undefined)ob=99;
-      if(oa!==ob)return oa-ob;
-      if(oa===0){var na=isNtp(la)?1:0,nb=isNtp(lb)?1:0;if(na!==nb)return na-nb;}
-      var c=String(la.linhVuc||"").localeCompare(String(lb.linhVuc||""),"vi");if(c)return c;
-      var qa=quyTrinhNo(la.quyTrinh),qb=quyTrinhNo(lb.quyTrinh);
-      if(qa!==qb)return qa<qb?-1:1;
-      c=String(la.quyTrinh||"").localeCompare(String(lb.quyTrinh||""),"vi");if(c)return c;
-      return a-b;
-    });
+    var order=lineDisplayOrder(r);
     order.forEach(function(i,pos){h+=lineRow(r,r.lines[i],i,dis,pos+1);});
     h+="</tbody></table></div><p class=\"subnote\">Dòng có nhãn 🔗 đã liên kết Danh mục PTĐ — dữ liệu được chụp snapshot tại thời điểm thêm (Mục 4, Mục 8).</p></div>";
 
