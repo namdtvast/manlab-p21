@@ -644,7 +644,7 @@
     var html='<div class="vtabs">'+tabs.map(function(t){return '<button class="vtab" role="tab" aria-selected="'+(state.view===t[0])+'" data-view="'+t[0]+'">'+t[1]+'</button>';}).join("")+'</div>';
     html+=statusStrip(r);
     if(state.view==="editor")html+=renderEditor(r);
-    else if(state.view==="doc")html+='<div class="no-print" style="margin-bottom:.8rem"><button class="btn sm" id="printbtn">🖨 In / Xuất PDF</button></div>'+renderDoc(r);
+    else if(state.view==="doc")html+='<div class="no-print" style="margin-bottom:.8rem"><button class="btn sm" id="printbtn">🖨 In / Xuất PDF</button> <button class="btn sm" id="wordbtn">📝 Xuất Word</button></div>'+renderDoc(r);
     else if(state.view==="public")html+=renderPublic(r);
     else if(state.view==="versions")html+=renderVersions(r);
     else if(state.view==="annual")html+=renderAnnual(r);
@@ -918,6 +918,20 @@
 
   /* ----- Document: Mẫu 01 (DL) / Mẫu 9.01 (QTMT) ----- */
   function renderDoc(r){return r.loai==="DL"?docDL(r):docQT(r);}
+
+  // Xuất Word: lấy đúng bản đang hiển thị (.docpaper) kèm CSS của trang, lưu dạng Word (HTML tương thích Word)
+  function exportWord(r){
+    var paper=document.querySelector(".docpaper");if(!paper)return;
+    var css=Array.prototype.map.call(document.querySelectorAll("style"),function(s){return s.textContent;}).join("\n");
+    var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'+
+      '<head><meta charset="utf-8"><title>'+esc(r.id)+'</title>'+
+      '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->'+
+      '<style>'+css+' @page{size:A4 portrait;margin:14mm 12mm}</style></head><body>'+paper.outerHTML+'</body></html>';
+    var blob=new Blob(["﻿"+html],{type:"application/msword"});
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=r.id.replace(/[\/\\]/g,"-")+".doc";
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+  }
   function docHeader(r,soSuffix){
     var d=r.ngay?parse(r.ngay):null;
     var dateStr='Hà Nội, ngày '+(d?pad(d.getDate()):"…")+' tháng '+(d?pad(d.getMonth()+1):"…")+' năm '+(d?d.getFullYear():"…");
@@ -1212,6 +1226,7 @@
     if(t.id==="addline"){var r=cur();r.lines.push(blankLine(r.loai));save();renderMain();return;}
     if(t.dataset.del!=null){var r=cur();r.lines.splice(+t.dataset.del,1);save();renderMain();return;}
     if(t.id==="printbtn"){window.print();return;}
+    if(t.id==="wordbtn"){exportWord(cur());return;}
   });
   var pickerComposing=false; // true khi bộ gõ tiếng Việt (Telex/VNI) đang ghép chữ trong ô tìm PTĐ
   function applyPickerQuery(){renderMain();var v=document.getElementById("pickerq");if(v){v.focus();v.setSelectionRange(v.value.length,v.value.length);}}
