@@ -126,6 +126,10 @@
   tr.rowerr td:first-child{border-left:3px solid var(--bad)}
   .sttcell{text-align:center;color:var(--ink-soft);font-weight:600}
   tr.rowerr .sttcell{color:var(--bad)}
+  tr.flash td{animation:rowflash 1.6s ease-out}
+  @keyframes rowflash{0%,30%{background:#F3C4CB}100%{background:transparent}}
+  .gaplink{color:var(--bad);font-weight:600;text-decoration:underline;cursor:pointer}
+  .gapmore{border:0;background:transparent;color:var(--bad);font-weight:700;font-size:.8rem;cursor:pointer;padding:0;text-decoration:underline}
   .ct-foot{padding:.5rem;background:var(--paper)}
   .linkbadge{display:inline-block;font-size:.6rem;font-weight:700;color:var(--teal);background:var(--teal-soft);
     border-radius:3px;padding:0 .3rem;margin-top:.2rem;white-space:nowrap}
@@ -495,15 +499,19 @@
     if((l.kq==="khong"||l.kq==="dieuchinh")&&!hasEvidence)g.push("Bằng chứng: ảnh chụp màn hình / tài liệu (bắt buộc — BR10)");
     return g;
   }
-  function recordGaps(r){
+  // Mỗi mục thiếu: {t: nội dung, line: chỉ số dòng năng lực (null nếu là trường bảng cha)}
+  function gapItems(r){
     var out=[];
-    if(!(r.coQuanTiepNhan||"").trim())out.push("Cơ quan tiếp nhận");
-    if(!r.toChuc.trim())out.push("Tên tổ chức");
-    if(!r.diaChi.trim())out.push("Địa chỉ");
-    if(!r.daiDien.trim())out.push("Người đại diện pháp luật");
-    if(r.loai==="DL"&&!(r.diaDiem||"").trim())out.push("Địa điểm thực hiện hoạt động");
-    r.lines.forEach(function(l,i){var g=lineGaps(r,l);if(g.length)out.push("Dòng "+(i+1)+" ("+(l.ten||l.thongSo||"chưa đặt tên")+"): "+g.join(", "));});
+    if(!(r.coQuanTiepNhan||"").trim())out.push({t:"Cơ quan tiếp nhận"});
+    if(!r.toChuc.trim())out.push({t:"Tên tổ chức"});
+    if(!r.diaChi.trim())out.push({t:"Địa chỉ"});
+    if(!r.daiDien.trim())out.push({t:"Người đại diện pháp luật"});
+    if(r.loai==="DL"&&!(r.diaDiem||"").trim())out.push({t:"Địa điểm thực hiện hoạt động"});
+    r.lines.forEach(function(l,i){var g=lineGaps(r,l);if(g.length)out.push({t:"Dòng "+(i+1)+" ("+(l.ten||l.thongSo||"chưa đặt tên")+"): "+g.join(", "),line:i});});
     return out;
+  }
+  function recordGaps(r){
+    return gapItems(r).map(function(x){return x.t;});
   }
 
   /* ---------- Gate G1–G7 (Mục 9.1 — kiểm tra tự động khi Lập kế hoạch) ---------- */
@@ -640,12 +648,17 @@
   /* ----- Editor ----- */
   function renderEditor(r){
     var dis=isEditable(r)?"":"disabled";
-    var gaps=recordGaps(r);
+    var gaps=gapItems(r);
     var h='';
     if(gaps.length){
+      var GAP_LIMIT=10,gapsOpen=!!state.gapsOpen;
+      var shown=gapsOpen?gaps:gaps.slice(0,GAP_LIMIT);
       h+='<div class="gaps"><b>Kiểm tra trước khi gửi soát xét (Mục 8.2 — trường bắt buộc)</b> — còn '+gaps.length+' mục cần bổ sung:<ul>'+
-        gaps.slice(0,10).map(function(g){return '<li>'+esc(g)+'</li>';}).join("")+
-        (gaps.length>10?'<li>… và '+(gaps.length-10)+' mục khác</li>':'')+'</ul></div>';
+        shown.map(function(g){
+          var txt=esc(g.t);
+          return '<li>'+(g.line!=null?'<a href="#" class="gaplink" data-goto="'+g.line+'">'+txt+'</a>':txt)+'</li>';
+        }).join("")+
+        (gaps.length>GAP_LIMIT?'<li><button class="gapmore" data-action="togglegaps">'+(gapsOpen?'Thu gọn':'… và '+(gaps.length-GAP_LIMIT)+' mục khác')+'</button></li>':'')+'</ul></div>';
     }else{
       h+='<div class="gaps ok"><b>✓ Đã đủ trường bắt buộc</b> — hồ sơ sẵn sàng để gửi soát xét / phê duyệt.</div>';
     }
@@ -806,7 +819,15 @@
     var trcls=gaps.length?' class="rowerr"':'';
     var trtitle=gaps.length?' title="Thiếu: '+esc(gaps.join(", "))+'"':'';
     // Cả DL và QTMT dùng chung hàng bảng Năng lực (cấu trúc Đối tượng)
-    return '<tr'+trcls+trtitle+'><td class="sttcell">'+stt+'</td><td>'+sel("dichVu",DV)+'</td><td>'+inp("ten")+linkTag+'</td><td>'+inp("linhVuc")+'</td><td>'+inp("phamVi")+'</td><td>'+inp("ccx")+'</td><td>'+inp("quyTrinh")+'</td><td>'+inp("nguoiTH")+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+inp("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
+    return '<tr id="ln-'+i+'"'+trcls+trtitle+'><td class="sttcell">'+stt+'</td><td>'+sel("dichVu",DV)+'</td><td>'+inp("ten")+linkTag+'</td><td>'+inp("linhVuc")+'</td><td>'+inp("phamVi")+'</td><td>'+inp("ccx")+'</td><td>'+inp("quyTrinh")+'</td><td>'+inp("nguoiTH")+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+inp("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
+  }
+  // Cuộn tới dòng năng lực còn thiếu, nháy viền đỏ và đặt con trỏ vào ô trống đầu tiên
+  function gotoLine(i){
+    var row=document.getElementById("ln-"+i);if(!row)return;
+    row.scrollIntoView({behavior:"smooth",block:"center"});
+    row.classList.add("flash");setTimeout(function(){row.classList.remove("flash");},1600);
+    var empty=Array.prototype.find.call(row.querySelectorAll("input[data-lf]:not([disabled])"),function(x){return !x.value.trim();});
+    if(empty)setTimeout(function(){empty.focus();},400);
   }
   function evidenceCell(l,i,dis){
     var has=l.bcFileName||l.bcFileData;
@@ -1146,6 +1167,8 @@
     if(t.dataset.action==="openpicker"){state.pickerFor=cur().id;state.pickerQ="";state.pickerShowFail=false;state.pickSel={};renderMain();return;}
     if(t.dataset.action==="closepicker"){state.pickerFor=null;state.pickSel={};renderMain();return;}
     if(t.dataset.action==="togglefail"){state.pickerShowFail=!state.pickerShowFail;renderMain();return;}
+    if(t.dataset.action==="togglegaps"){state.gapsOpen=!state.gapsOpen;renderMain();return;}
+    if(t.dataset.goto!=null){e.preventDefault();gotoLine(+t.dataset.goto);return;}
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();var rSel=cur();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
