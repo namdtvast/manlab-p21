@@ -504,23 +504,19 @@
     if((l.kq==="khong"||l.kq==="dieuchinh")&&!hasEvidence)g.push("Bằng chứng: ảnh chụp màn hình / tài liệu (bắt buộc — BR10)");
     return g;
   }
-  // Thứ tự hiển thị bảng Năng lực (trả về mảng chỉ số gốc theo thứ tự hiển thị; chỉ số gốc dùng cho binding và id dòng):
-  // (1) Dịch vụ Kiểm định → Hiệu chuẩn → Thử nghiệm → Quan trắc; (2) trong Kiểm định: Kiểm định trực tiếp trước, NTP (nhà thầu phụ) sau;
-  // (3) Lĩnh vực (gom trọn từng lĩnh vực trong cùng dịch vụ); (4) Số ký hiệu quy trình từ bé đến lớn, rồi tên quy trình.
+  // Thứ tự hiển thị bảng Năng lực: KĐ → KĐTN → HC → TN, cùng Lĩnh vực, sau đó số hiệu quy trình tăng dần.
+  // Trả về chỉ số gốc để binding dữ liệu không thay đổi khi chỉ sắp xếp phần hiển thị.
+  var naturalViCollator=new Intl.Collator("vi",{numeric:true,sensitivity:"base"});
   function lineDisplayOrder(r){
-    var dvOrder={kiemdinh:0,hieuchuan:1,thunghiem:2,quantrac:3};
-    function quyTrinhNo(q){var m=String(q||"").match(/\d+/);return m?+m[0]:Infinity;}
-    function isNtp(l){return !!(l.ntp||/\bNTP\b|Nhà thầu phụ/i.test(String(l.quyTrinh||"")));} // dòng cũ chưa có cờ ntp → nhận diện theo quy trình
+    var dvOrder={"KĐ":0,"KĐTN":1,"HC":2,"TN":3,"QTMT":4};
+    function serviceCode(l){return l.dichVuCode||({kiemdinh:"KĐ",hieuchuan:"HC",thunghiem:"TN",quantrac:"QTMT"}[l.dichVu])||l.dichVu;}
     return r.lines.map(function(l,i){return i;}).sort(function(a,b){
       var la=r.lines[a],lb=r.lines[b];
-      var oa=dvOrder[la.dichVu];if(oa===undefined)oa=99;
-      var ob=dvOrder[lb.dichVu];if(ob===undefined)ob=99;
+      var oa=dvOrder[serviceCode(la)];if(oa===undefined)oa=99;
+      var ob=dvOrder[serviceCode(lb)];if(ob===undefined)ob=99;
       if(oa!==ob)return oa-ob;
-      if(oa===0){var na=isNtp(la)?1:0,nb=isNtp(lb)?1:0;if(na!==nb)return na-nb;}
-      var c=String(la.linhVuc||"").localeCompare(String(lb.linhVuc||""),"vi");if(c)return c;
-      var qa=quyTrinhNo(la.quyTrinh),qb=quyTrinhNo(lb.quyTrinh);
-      if(qa!==qb)return qa<qb?-1:1;
-      c=String(la.quyTrinh||"").localeCompare(String(lb.quyTrinh||""),"vi");if(c)return c;
+      var c=naturalViCollator.compare(String(la.linhVuc||""),String(lb.linhVuc||""));if(c)return c;
+      c=naturalViCollator.compare(String(la.quyTrinh||""),String(lb.quyTrinh||""));if(c)return c;
       return a-b;
     });
   }
@@ -554,9 +550,24 @@
     if(!item.phamVi)reasons.push("Cần bổ sung phạm vi đo khi lập hồ sơ");
     return {pass:g1&&g3&&g6,reasons:reasons};
   }
-  // NTP là quy trình của nhà thầu phụ, không thuộc danh mục được phép chọn/đưa vào bảng năng lực.
-  function isNtpProcedure(item){
-    return /\bNTP\b/i.test(String(item&&item.quyTrinh||""));
+  // Không đưa các nhóm dịch vụ nhà thầu phụ được chỉ định vào bảng chọn năng lực.
+  var EXCLUDED_NTP_SERVICES=["NTP (KĐ)","NTP (HC)","NTP (TN)","NTP (QT)","NTP (KĐAT)","NTP (RA)","NTP (VC)"];
+  function isExcludedNtpService(item){
+    if(!item)return false;
+    var raw=String(item.dichVuGoc||item.dichVu||"").trim().toUpperCase();
+    if(EXCLUDED_NTP_SERVICES.some(function(v){return v.toUpperCase()===raw;}))return true;
+    // Dữ liệu nhúng cũ chưa lưu DichVu gốc; chỉ fallback theo đúng 7 mã ở đầu ký hiệu quy trình.
+    return !item.dichVuGoc&&/^NTP\s*\((KĐ|HC|TN|QT|KĐAT|RA|VC)\)(?:\s|$)/i.test(String(item.quyTrinh||""));
+  }
+  function compareCatalogRows(a,b){
+    var order={"KĐ":0,"KĐTN":1,"HC":2,"TN":3,"QTMT":4};
+    var da=order[a.item.dichVu];if(da===undefined)da=99;
+    var db=order[b.item.dichVu];if(db===undefined)db=99;
+    if(da!==db)return da-db;
+    var c=naturalViCollator.compare(String(a.item.linhVuc||""),String(b.item.linhVuc||""));
+    if(c)return c;
+    c=naturalViCollator.compare(String(a.item.quyTrinh||""),String(b.item.quyTrinh||""));
+    return c||a.idx-b.idx;
   }
 
   /* ---------- Line schemas ---------- */
@@ -756,10 +767,11 @@
     var q=state.pickerQ.toLowerCase();
     var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item)};})
       .filter(function(x){
-        if(isNtpProcedure(x.item))return false;
+        if(isExcludedNtpService(x.item))return false;
         if(r.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false; // Hồ sơ QTMT chỉ lấy Đối tượng có Dịch vụ = QTMT (Quan trắc)
         if(r.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false; // Hồ sơ Đo lường chỉ lấy dịch vụ đo lường
-        if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;});
+        if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;})
+      .sort(compareCatalogRows);
     var pass=scored.filter(function(x){return x.gc.pass;});
     var fail=scored.filter(function(x){return !x.gc.pass;});
     var selCount=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];}).length;
@@ -816,6 +828,7 @@
   function addCatalogItem(r,item){
     var line=blankLine(r.loai);
     line.dichVu=DVREV[item.dichVu]||"hieuchuan";
+    line.dichVuCode=item.dichVu;
     line.ten=item.ten;line.linhVuc=item.linhVuc;line.phamVi=item.phamVi;
     line.ccx=item.dichVu==="HC"&&item.cmcMax?((item.cmcMax+" "+item.cmcDvt).trim()):item.mpelod;
     line.quyTrinh=item.quyTrinh||"";
@@ -1213,7 +1226,7 @@
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();var rSel=cur();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
-        .filter(function(x){if(isNtpProcedure(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
+        .filter(function(x){if(isExcludedNtpService(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
@@ -1222,7 +1235,7 @@
       var r=cur();var ids=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];});
       if(!ids.length)return;
       var added=0;
-      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isNtpProcedure(item)&&gateCheck(item).pass){addCatalogItem(r,item);added++;}});
+      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isExcludedNtpService(item)&&gateCheck(item).pass){addCatalogItem(r,item);added++;}});
       state.pickSel={};state.pickerFor=null;save();renderMain();
       if(added)setTimeout(function(){alert("Đã thêm "+added+" đối tượng vào hồ sơ.");},50);
       return;
@@ -1240,7 +1253,7 @@
     }
     if(t.dataset.pick!=null){
       var r=cur();var item=CATALOG[+t.dataset.pick];var gc=gateCheck(item);
-      if(isNtpProcedure(item)){alert("Không thể chọn đối tượng sử dụng quy trình NTP (nhà thầu phụ).");return;}
+      if(isExcludedNtpService(item)){alert("Không thể chọn đối tượng thuộc nhóm dịch vụ NTP (nhà thầu phụ).");return;}
       if(!gc.pass){alert("Đối tượng (PTĐ) này chưa đủ điều kiện:\n"+gc.reasons.join("\n"));return;}
       addCatalogItem(r,item);state.pickerFor=null;state.pickSel={};save();renderMain();
       return;
@@ -1268,6 +1281,7 @@
     else if(t.dataset.nm!=null){r.nenMau[t.dataset.nm]=t.checked;save();}
     else if(t.dataset.af){r.baoCaoHangNam=r.baoCaoHangNam||{};r.baoCaoHangNam[t.dataset.af]=t.value;save();}
     else if(t.dataset.lf!=null){var l=r.lines[+t.dataset.li];l[t.dataset.lf]=t.value;
+      if(t.dataset.lf==="dichVu")delete l.dichVuCode;
       if(t.dataset.lf!=="lyDo"&&t.dataset.lf!=="bangChung"&&t.dataset.lf!=="ten"&&t.dataset.lf!=="thongSo")l.linked=false; // chỉnh tay các trường kỹ thuật -> tách khỏi liên kết snapshot
       save();
       if(t.dataset.lf==="kq"){renderMain();}
@@ -1391,6 +1405,7 @@
               ten:item.TenPhuongTienDo||'',
               tenTA:item.TenTiengAnh||'',
               linhVuc:item.LinhVuc||'',
+              dichVuGoc:item.DichVu||'',
               dichVu:dvCode(item.DichVu),
               phamVi:item.PhamViApDungQuyTrinh||item.KhaNangDo_View||'',
               mpelod:item.SaiSoChoPhep_View||'',   // Sai số cho phép (MPE) — API không tách LOD
