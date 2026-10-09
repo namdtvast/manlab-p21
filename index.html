@@ -405,7 +405,7 @@
     loginPath:"/api/auth/login",          // POST {username,password} -> {token, user:{hoTen, vaiTro}}
     catalogPath:"/api/phuong-tien-do",     // GET (Bearer token) -> [ {ten,tenTA,linhVuc,dichVu,phamVi,mpelod,cmcMax,cmcDvt,quyTrinh,nangLucCode,trangThaiPTD} ]
     // ptdPath:"https://apimanlab2.manlab.vn/api/daotao/ptd_github.php", // GET PTD catalog from GitHub API (requires CORS headers)
-    ptdPath:"https://manlab.etv.org.vn/api/v1/copilot/view/vw_tb_qlManLab_api_phuongtiendo", // GET PTD catalog from GitHub API (requires CORS headers)
+    ptdPath:"https://manlab.etv.org.vn/api/v1/copilot/view/vw_tb_qlManLab_api_phuongtiendo?page=1&pageSize=2000", // GET PTD catalog from ManLab Copilot API (CORS enabled)
     roleMap:{"Lãnh đạo Viện":3,"Lanh dao Vien":3,"LDV":3,"Lãnh đạo phòng":2,"Lanh dao phong":2,"LDP":2,"Người thực hiện":1,"Nguoi thuc hien":1,"NTH":1,"Super Admin":0,"Admin":0}
   };
   // Demo accounts (fallback khi API ManLab chưa kết nối được — network/CORS)
@@ -553,6 +553,10 @@
     var cmcVal=String(item.cmcMax||"").trim(); if(isHC&&(cmcVal===""||cmcVal==="—"))reasons.push("Cần bổ sung CMC khi lập hồ sơ (NQ 66.18)");
     if(!item.phamVi)reasons.push("Cần bổ sung phạm vi đo khi lập hồ sơ");
     return {pass:g1&&g3&&g6,reasons:reasons};
+  }
+  // NTP là quy trình của nhà thầu phụ, không thuộc danh mục được phép chọn/đưa vào bảng năng lực.
+  function isNtpProcedure(item){
+    return /\bNTP\b/i.test(String(item&&item.quyTrinh||""));
   }
 
   /* ---------- Line schemas ---------- */
@@ -752,6 +756,7 @@
     var q=state.pickerQ.toLowerCase();
     var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item)};})
       .filter(function(x){
+        if(isNtpProcedure(x.item))return false;
         if(r.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false; // Hồ sơ QTMT chỉ lấy Đối tượng có Dịch vụ = QTMT (Quan trắc)
         if(r.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false; // Hồ sơ Đo lường chỉ lấy dịch vụ đo lường
         if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;});
@@ -782,7 +787,7 @@
   }
   function pickerTable(list,ok){
     if(!list.length)return '<p class="subnote">'+(ok?"Không có PTĐ đủ điều kiện khớp tìm kiếm.":"Không có PTĐ chưa đủ điều kiện.")+'</p>';
-    var cols=["","Tên đối tượng","Lĩnh vực","Phạm vi đo","Cấp/ĐCX/ĐKĐBĐ/MPE/LOD","Tên quy trình","Người tham gia (mặc định)",""];
+    var cols=["","Tên phương tiện đo","Lĩnh vực","Phạm vi áp dụng quy trình","Sai số cho phép (MPE)","Quy trình (ký hiệu — tên)","Người thực hiện mặc định",""];
     var widths=["36px","210px","120px","150px","150px","160px","160px","82px"];
     var h='<div class="ptab-wrap"><table class="ptbl"><colgroup>'+
       widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>'+
@@ -801,7 +806,7 @@
       '<td>'+esc(item.linhVuc)+'</td>'+
       '<td>'+esc(item.phamVi||"—")+'</td>'+
       '<td>'+esc(cap||"—")+'</td>'+
-      '<td>'+esc((item.quyTrinh||"").split(" (")[0]||"—")+'</td>'+
+      '<td>'+esc(item.quyTrinh||"—")+'</td>'+
       '<td>'+esc(item.nguoiThucHien||"—")+'</td>'+
       '<td class="pcell-act">'+act+'</td>'+
     '</tr>';
@@ -813,7 +818,7 @@
     line.dichVu=DVREV[item.dichVu]||"hieuchuan";
     line.ten=item.ten;line.linhVuc=item.linhVuc;line.phamVi=item.phamVi;
     line.ccx=item.dichVu==="HC"&&item.cmcMax?((item.cmcMax+" "+item.cmcDvt).trim()):item.mpelod;
-    line.quyTrinh=(item.quyTrinh||"").split(" (")[0];
+    line.quyTrinh=item.quyTrinh||"";
     line.nguoiTH=item.nguoiThucHien||"";line.catalogRef=item.ten;line.linked=true; // Người TH = Người tham gia (mặc định) từ DB ManLab
     line.ntp=!!item.ntp;
     r.lines.push(line);
@@ -1208,7 +1213,7 @@
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();var rSel=cur();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
-        .filter(function(x){if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
+        .filter(function(x){if(isNtpProcedure(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
@@ -1217,7 +1222,7 @@
       var r=cur();var ids=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];});
       if(!ids.length)return;
       var added=0;
-      ids.forEach(function(k){var item=CATALOG[+k];if(item&&gateCheck(item).pass){addCatalogItem(r,item);added++;}});
+      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isNtpProcedure(item)&&gateCheck(item).pass){addCatalogItem(r,item);added++;}});
       state.pickSel={};state.pickerFor=null;save();renderMain();
       if(added)setTimeout(function(){alert("Đã thêm "+added+" đối tượng vào hồ sơ.");},50);
       return;
@@ -1235,6 +1240,7 @@
     }
     if(t.dataset.pick!=null){
       var r=cur();var item=CATALOG[+t.dataset.pick];var gc=gateCheck(item);
+      if(isNtpProcedure(item)){alert("Không thể chọn đối tượng sử dụng quy trình NTP (nhà thầu phụ).");return;}
       if(!gc.pass){alert("Đối tượng (PTĐ) này chưa đủ điều kiện:\n"+gc.reasons.join("\n"));return;}
       addCatalogItem(r,item);state.pickerFor=null;state.pickSel={};save();renderMain();
       return;
@@ -1360,13 +1366,16 @@
         return res.json();
       })
       .then(function(data){
-        // Transform new API response format
-        var items=data.data&&data.data.items?data.data.items:[];
+        // Copilot view API trả {totalCount, page, pageSize, data:[...]}; vẫn hỗ trợ schema ptd_github cũ khi cần fallback.
+        var items=Array.isArray(data.data)?data.data:(data.data&&Array.isArray(data.data.items)?data.data.items:[]);
         if(items.length){
           // Transform API fields to app format
-          // API ptd_github.php trả nhãn dịch vụ đầy đủ (vd "Hiệu chuẩn", "Quan trắc"...) → quy về mã dịch vụ nội bộ (HC/KĐ/KĐTN/TN/QTMT)
+          // API có thể trả mã (HC/KĐ/KĐTN/TN/QTMT) hoặc nhãn dịch vụ đầy đủ → quy về mã nội bộ.
           function dvCode(s){
             s=String(s||'');
+            if(/^NTP\s*\(HC\)$/i.test(s))return 'HC';
+            if(/^NTP\s*\(KĐ\)$/i.test(s))return 'KĐ';
+            if(/^NTP\s*\(TN\)$/i.test(s))return 'TN';
             if(s.indexOf('Quan trắc')>-1)return 'QTMT';
             if(s.indexOf('Hiệu chuẩn')>-1)return 'HC';
             if(s.indexOf('tự nguyện')>-1)return 'KĐTN'; // "Kiểm định tự nguyện" — kiểm tra trước "Kiểm định" thường
@@ -1374,27 +1383,28 @@
             if(s.toLowerCase().indexOf('thử nghiệm')>-1)return 'TN';
             return s; // dịch vụ khác (Thủ tục, Đào tạo, Bảo trì...) — không thuộc ĐL/QTMT, sẽ tự bị lọc khỏi picker
           }
-          // Map field theo schema MỚI của ptd_github.php (đã đổi so với API cũ: DichVu/LinhVuc/PhamViApDungQuyTrinh/QuyTrinh/NguoiThucHienMacDinh/SaiSoChoPhep_View/KhaNangDo_View)
+          // Map field theo schema Copilot view vw_tb_qlManLab_api_phuongtiendo.
           var transformed=items.map(function(item){
+            var quyTrinh=[item.QuyTrinh_KyHieu,item.QuyTrinh_Ten].filter(function(v){return !!v;}).join(" — ")||item.QuyTrinh||'';
             return {
               id:item.ID||'',
               ten:item.TenPhuongTienDo||'',
-              tenTA:'',
+              tenTA:item.TenTiengAnh||'',
               linhVuc:item.LinhVuc||'',
               dichVu:dvCode(item.DichVu),
               phamVi:item.PhamViApDungQuyTrinh||item.KhaNangDo_View||'',
-              mpelod:item.SaiSoChoPhep_View||'',   // Sai số cho phép (MPE) — API mới không tách LOD
-              cmcMax:'',                            // ptd_github.php không trả CMC → KTV bổ sung khi lập hồ sơ (G2)
+              mpelod:item.SaiSoChoPhep_View||'',   // Sai số cho phép (MPE) — API không tách LOD
+              cmcMax:'',                            // API không trả CMC → KTV bổ sung khi lập hồ sơ (G2)
               cmcDvt:'',
-              quyTrinh:item.QuyTrinh||'',
-              nangLucCode:'(theo danh mục ptd_github)', // API mới không trả mã năng lực → coi danh mục đã công bố là hợp lệ (bỏ chặn G6)
-              trangThaiPTD:'Đã duyệt',              // ptd_github = danh mục đã công bố → coi là đã duyệt (qua cổng G1)
+              quyTrinh:quyTrinh,
+              nangLucCode:item.NangLucMulti||'',
+              trangThaiPTD:item.TrangThaiDuyet||'',
               nguoiThucHien:item.NguoiThucHienMacDinh||'',
-              ntp:/Nhà thầu phụ/i.test(String(item.DichVu||'')) // nhãn gốc "Kiểm định (Nhà thầu phụ)" → nhóm NTP trong Kiểm định
+              ntp:/nhà thầu phụ/i.test(String(item.TrangThaiNTP||item.DichVu||''))
             };
           });
           CATALOG=transformed;state.catalogSource="manlab";state.catalogUpdatedAt=nowISO();
-          cb(true,"Đã cập nhật "+transformed.length+" đối tượng từ GitHub API ManLab.");
+          cb(true,"Đã cập nhật "+transformed.length+"/"+(data.totalCount||transformed.length)+" đối tượng từ API ManLab.");
         }else{cb(false,"ManLab trả về danh mục rỗng.");}
       })
       .catch(function(err){
