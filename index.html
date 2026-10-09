@@ -197,6 +197,9 @@
   .docpaper table.f{width:100%;border-collapse:collapse;font-size:11pt;margin:.4rem 0 .8rem}
   .docpaper table.f th,.docpaper table.f td{border:1px solid #000;padding:.25rem .35rem;vertical-align:top}
   .docpaper table.f th{text-align:center;font-weight:700;background:#f0f0f0}
+  .docpaper table.f th:nth-child(3),.docpaper table.f td:nth-child(3),
+  .docpaper table.f th:nth-child(4),.docpaper table.f td:nth-child(4),
+  .docpaper table.f th:nth-child(5),.docpaper table.f td:nth-child(5){text-align:center}
   .docpaper .sign{display:flex;justify-content:space-between;margin-top:1.4rem;text-align:center;font-size:11.5pt}
   .docpaper .sign .col{flex:1}
   .docpaper .sec{font-weight:700;margin-top:.8rem}
@@ -986,7 +989,7 @@
     var d=r.ngay?parse(r.ngay):null;
     var dateStr='Hà Nội, ngày '+(d?pad(d.getDate()):"…")+' tháng '+(d?pad(d.getMonth()+1):"…")+' năm '+(d?d.getFullYear():"…");
     function tbl(dv){
-      var ls=r.lines.filter(function(l){return l.dichVu===dv;});
+      var ls=lineDisplayOrder(r).map(function(i){return r.lines[i];}).filter(function(l){return l.dichVu===dv;});
       if(!ls.length)return'<p class="line"><i>(Không có)</i></p>';
       return '<table class="f"><thead><tr><th>TT</th><th>Tên phương tiện đo / chuẩn đo lường</th><th>Lĩnh vực</th><th>Phạm vi đo</th><th>Cấp/ độ chính xác/ ĐKĐBĐ/ Sai số/ MPE/ LOD</th><th>Quy trình thực hiện</th><th>Ghi chú</th></tr></thead><tbody>'+
         ls.map(function(l,i){return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+esc(l.ten)+(l.kq==="khong"?' <b style="color:#b23a48">[chưa đủ ĐK]</b>':"")+'</td><td>'+esc(l.linhVuc)+'</td><td>'+esc(l.phamVi)+'</td><td>'+esc(l.ccx)+'</td><td>'+esc(l.quyTrinh)+'</td><td>'+esc(l.ghiChu)+'</td></tr>';}).join("")+'</tbody></table>';
@@ -1028,7 +1031,7 @@
       '<p class="line">'+nm.map(function(o){return (r.nenMau[o[0]]?"☑":"☐")+" "+o[1];}).join(" &nbsp; ")+'</p>'+
       '<p class="sec">Danh mục đối tượng năng lực:</p>'+
       (function(){
-        var ls=r.lines;
+        var ls=lineDisplayOrder(r).map(function(i){return r.lines[i];});
         if(!ls.length)return '<p class="line"><i>(Không có)</i></p>';
         return '<table class="f"><thead><tr><th>TT</th><th>Tên đối tượng</th><th>Lĩnh vực</th><th>Phạm vi đo</th><th>Cấp/ ĐCX/ ĐKĐBĐ/ MPE/ LOD</th><th>Quy trình thực hiện</th><th>Ghi chú</th></tr></thead><tbody>'+
           ls.map(function(l,i){return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+esc(l.ten)+(l.kq==="khong"?' <b style="color:#b23a48">[chưa đủ ĐK]</b>':"")+'</td><td>'+esc(l.linhVuc)+'</td><td>'+esc(l.phamVi)+'</td><td>'+esc(l.ccx)+'</td><td>'+esc(l.quyTrinh)+'</td><td>'+esc(l.ghiChu||"")+'</td></tr>';}).join("")+'</tbody></table>';
