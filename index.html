@@ -127,6 +127,7 @@
   tr.rowerr td:first-child{border-left:3px solid var(--bad)}
   .sttcell{text-align:center;color:var(--ink-soft);font-weight:600}
   tr.rowerr .sttcell{color:var(--bad)}
+  table.ct textarea.fieldwarn{border-color:var(--warn);background:var(--warn-bg);box-shadow:inset 0 0 0 1px var(--warn)}
   tr.flash td{animation:rowflash 1.6s ease-out}
   @keyframes rowflash{0%,30%{background:#F3C4CB}100%{background:transparent}}
   .gaplink{color:var(--bad);font-weight:600;text-decoration:underline;cursor:pointer}
@@ -495,14 +496,43 @@
   function hasGoodLine(r){return r.lines.some(function(l){return l.kq==="dapung"||l.kq==="dieuchinh";});}
 
   /* ---------- Field-level validation (Mục 8.2 — trường bắt buộc B) ---------- */
+  function compactValidationValue(value){
+    return String(value||"").trim().replace(/\s+/g,"").toLocaleLowerCase("vi");
+  }
+  function technicalValueWarning(value){
+    var compact=compactValidationValue(value);
+    var placeholders={"":1,"±":1,"%":1,"mm":1,"%rh":1,"°c":1};
+    return placeholders[compact]?"Cấp/ĐCX/ĐKĐBĐ/MPE/LOD: giá trị chưa đầy đủ (“"+(String(value||"").trim()||"ô trống")+"”)":"";
+  }
+  function rangeValueWarning(value){
+    var raw=String(value||"").trim();
+    var compact=compactValidationValue(raw);
+    if(!raw||compact==="n/a"||compact==="na"||compact==="0-"||compact==="0"){
+      return "Phạm vi đo: phải có điểm đầu và điểm cuối";
+    }
+    // Phạm vi hợp lệ phải thể hiện tối thiểu hai giá trị số, ví dụ (0 ÷ 100) mg/L.
+    var endpoints=raw.match(/[-+]?\d+(?:[.,]\d+)?(?:e[-+]?\d+)?/ig)||[];
+    return endpoints.length<2?"Phạm vi đo: phải có điểm đầu và điểm cuối":"";
+  }
+  function participantWarning(value){
+    var normalized=String(value||"").trim().replace(/\s+/g," ").toLocaleLowerCase("vi");
+    return (!normalized||normalized==="không có"||normalized==="bỏ trống")?"Người tham gia (mặc định): chưa có người thực hiện":"";
+  }
+  function lineFieldWarnings(l){
+    return {
+      phamVi:rangeValueWarning(l.phamVi),
+      ccx:technicalValueWarning(l.ccx),
+      nguoiTH:participantWarning(l.nguoiTH)
+    };
+  }
   function lineGaps(r,l){
     var g=[];
     // Cả DL và QTMT dùng chung bảng Năng lực (cấu trúc Đối tượng)
     if(!(l.ten||"").trim())g.push("Tên đối tượng");
     if(!(l.linhVuc||"").trim())g.push("Lĩnh vực");
-    if(!(l.phamVi||"").trim())g.push("Phạm vi đo");
     if(!(l.quyTrinh||"").trim())g.push("Quy trình thực hiện");
-    if(!(l.ccx||"").trim())g.push("Cấp/ĐCX/MPE/LOD");
+    var warnings=lineFieldWarnings(l);
+    [warnings.phamVi,warnings.ccx,warnings.nguoiTH].forEach(function(w){if(w)g.push(w);});
     var hasEvidence=(l.bangChung&&l.bangChung.trim())||l.bcFileName;
     if((l.kq==="khong"||l.kq==="dieuchinh")&&!l.lyDo.trim())g.push("Lý do (bắt buộc — BR10)");
     if((l.kq==="khong"||l.kq==="dieuchinh")&&!hasEvidence)g.push("Bằng chứng: ảnh chụp màn hình / tài liệu (bắt buộc — BR10)");
@@ -731,7 +761,7 @@
     if(gaps.length){
       var GAP_LIMIT=10,gapsOpen=!!state.gapsOpen;
       var shown=gapsOpen?gaps:gaps.slice(0,GAP_LIMIT);
-      h+='<div class="gaps"><b>Kiểm tra trước khi gửi soát xét (Mục 8.2 — trường bắt buộc)</b> — còn '+gaps.length+' mục cần bổ sung:<ul>'+
+      h+='<div class="gaps"><b>⚠ Kiểm tra trước khi gửi soát xét (Mục 8.2)</b> — còn '+gaps.length+' mục cần bổ sung hoặc chỉnh sửa:<ul>'+
         shown.map(function(g){
           var txt=esc(g.t);
           return '<li>'+(g.line!=null?'<a href="#" class="gaplink" data-goto="'+g.line+'">'+txt+'</a>':txt)+'</li>';
@@ -876,25 +906,26 @@
 
   function lineRow(r,l,i,dis,stt){
     function inp(k){return '<input value="'+esc(l[k])+'" data-lf="'+k+'" data-li="'+i+'" '+dis+'>';}
-    function txt(k,rows){return '<textarea rows="'+(rows||2)+'" data-lf="'+k+'" data-li="'+i+'" '+dis+'>'+esc(l[k])+'</textarea>';}
+    function txt(k,rows,warning){return '<textarea rows="'+(rows||2)+'" data-lf="'+k+'" data-li="'+i+'" '+dis+(warning?' class="fieldwarn" aria-invalid="true" title="'+esc(warning)+'"':'')+'>'+esc(l[k])+'</textarea>';}
     function sel(k,map){return '<select data-lf="'+k+'" data-li="'+i+'" '+dis+'>'+Object.keys(map).map(function(v){return '<option value="'+v+'" '+(l[k]===v?"selected":"")+'>'+map[v]+'</option>';}).join("")+'</select>';}
     var del=dis?"":'<button class="rowdel" data-del="'+i+'" title="Xóa dòng">✕</button>';
     var kqcls="kq-"+l.kq;
     var linkTag=l.linked?'<span class="linkbadge">🔗 Danh mục PTĐ</span>':'';
     var ev=evidenceCell(l,i,dis);
+    var warnings=lineFieldWarnings(l);
     var gaps=lineGaps(r,l);
     var trcls=gaps.length?' class="rowerr"':'';
-    var trtitle=gaps.length?' title="Thiếu: '+esc(gaps.join(", "))+'"':'';
+    var trtitle=gaps.length?' title="Cảnh báo: '+esc(gaps.join(", "))+'"':'';
     // Cả DL và QTMT dùng chung hàng bảng Năng lực (cấu trúc Đối tượng)
-    return '<tr id="ln-'+i+'"'+trcls+trtitle+'><td class="sttcell">'+stt+'</td><td>'+sel("dichVu",DV)+'</td><td>'+txt("ten")+linkTag+'</td><td>'+txt("linhVuc")+'</td><td>'+txt("phamVi")+'</td><td>'+txt("ccx")+'</td><td>'+txt("quyTrinh",3)+'</td><td>'+txt("nguoiTH",3)+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+txt("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
+    return '<tr id="ln-'+i+'"'+trcls+trtitle+'><td class="sttcell">'+stt+'</td><td>'+sel("dichVu",DV)+'</td><td>'+txt("ten")+linkTag+'</td><td>'+txt("linhVuc")+'</td><td>'+txt("phamVi",2,warnings.phamVi)+'</td><td>'+txt("ccx",2,warnings.ccx)+'</td><td>'+txt("quyTrinh",3)+'</td><td>'+txt("nguoiTH",3,warnings.nguoiTH)+'</td><td>'+sel("ghiChu",{"":"—","Bổ sung":"Bổ sung","Điều chỉnh":"Điều chỉnh"})+'</td><td class="'+kqcls+'">'+sel("kq",KQ)+'</td><td>'+txt("lyDo")+'</td><td>'+ev+'</td><td>'+del+'</td></tr>';
   }
   // Cuộn tới dòng năng lực còn thiếu, nháy viền đỏ và đặt con trỏ vào ô trống đầu tiên
   function gotoLine(i){
     var row=document.getElementById("ln-"+i);if(!row)return;
     row.scrollIntoView({behavior:"smooth",block:"center"});
     row.classList.add("flash");setTimeout(function(){row.classList.remove("flash");},1600);
-    var empty=Array.prototype.find.call(row.querySelectorAll("input[data-lf]:not([disabled]),textarea[data-lf]:not([disabled])"),function(x){return !x.value.trim();});
-    if(empty)setTimeout(function(){empty.focus();},400);
+    var target=row.querySelector(".fieldwarn:not([disabled])")||Array.prototype.find.call(row.querySelectorAll("input[data-lf]:not([disabled]),textarea[data-lf]:not([disabled])"),function(x){return !x.value.trim();});
+    if(target)setTimeout(function(){target.focus();},400);
   }
   function evidenceCell(l,i,dis){
     var has=l.bcFileName||l.bcFileData;
@@ -1326,6 +1357,11 @@
       save();
       if(t.dataset.lf==="kq"){renderMain();}
     }
+  });
+  // Cập nhật cảnh báo sau khi người dùng rời ô; không render trong lúc gõ để tránh mất con trỏ/bộ gõ tiếng Việt.
+  elMain.addEventListener("change",function(e){
+    var t=e.target;
+    if(t&&t.dataset.lf!=null&&["phamVi","ccx","nguoiTH"].indexOf(t.dataset.lf)>-1)renderMain();
   });
   elList.addEventListener("click",function(e){
     var d=e.target.closest("[data-delrec]");
