@@ -511,6 +511,25 @@
   // Thứ tự hiển thị bảng Năng lực: KĐ → KĐTN → HC → TN, cùng Lĩnh vực, sau đó số hiệu quy trình tăng dần.
   // Trả về chỉ số gốc để binding dữ liệu không thay đổi khi chỉ sắp xếp phần hiển thị.
   var naturalViCollator=new Intl.Collator("vi",{numeric:true,sensitivity:"base"});
+  function normalizedSortText(value){
+    var s=String(value||"").trim().replace(/\s+/g," ");
+    return s.normalize?s.normalize("NFC"):s;
+  }
+  function procedureCode(item){
+    if(item&&item.quyTrinhKyHieu)return normalizedSortText(item.quyTrinhKyHieu);
+    var q=normalizedSortText(item&&item.quyTrinh);
+    var atEnd=q.match(/\(([^()]*(?:ĐLVN|ETV\.?|TCVN|QTKĐ|QTHC|QTTN|ISO|ASTM|US EPA|SMEWW)[^()]*)\)$/i);
+    if(atEnd)return normalizedSortText(atEnd[1]);
+    var atStart=q.match(/^((?:ĐLVN|ETV\.?|TCVN|QTKĐ|QTHC|QTTN|ISO|ASTM|US EPA|SMEWW)\s*[^\s(]*(?:\s*\d+(?:\s*:\s*\d+)?)?)/i);
+    return normalizedSortText(atStart?atStart[1]:q);
+  }
+  function compareFieldAndProcedure(a,b){
+    var c=naturalViCollator.compare(normalizedSortText(a&&a.linhVuc),normalizedSortText(b&&b.linhVuc));
+    if(c)return c;
+    c=naturalViCollator.compare(procedureCode(a),procedureCode(b));
+    if(c)return c;
+    return naturalViCollator.compare(normalizedSortText(a&&a.quyTrinh),normalizedSortText(b&&b.quyTrinh));
+  }
   function lineDisplayOrder(r){
     var dvOrder={"KĐ":0,"KĐTN":1,"HC":2,"TN":3,"QTMT":4};
     function serviceCode(l){return l.dichVuCode||({kiemdinh:"KĐ",hieuchuan:"HC",thunghiem:"TN",quantrac:"QTMT"}[l.dichVu])||l.dichVu;}
@@ -519,8 +538,7 @@
       var oa=dvOrder[serviceCode(la)];if(oa===undefined)oa=99;
       var ob=dvOrder[serviceCode(lb)];if(ob===undefined)ob=99;
       if(oa!==ob)return oa-ob;
-      var c=naturalViCollator.compare(String(la.linhVuc||""),String(lb.linhVuc||""));if(c)return c;
-      c=naturalViCollator.compare(String(la.quyTrinhKyHieu||la.quyTrinh||""),String(lb.quyTrinhKyHieu||lb.quyTrinh||""));if(c)return c;
+      var c=compareFieldAndProcedure(la,lb);if(c)return c;
       return a-b;
     });
   }
@@ -574,9 +592,7 @@
     var da=order[a.item.dichVu];if(da===undefined)da=99;
     var db=order[b.item.dichVu];if(db===undefined)db=99;
     if(da!==db)return da-db;
-    var c=naturalViCollator.compare(String(a.item.linhVuc||""),String(b.item.linhVuc||""));
-    if(c)return c;
-    c=naturalViCollator.compare(String(a.item.quyTrinhKyHieu||a.item.quyTrinh||""),String(b.item.quyTrinhKyHieu||b.item.quyTrinh||""));
+    var c=compareFieldAndProcedure(a.item,b.item);
     return c||a.idx-b.idx;
   }
   function catalogSearchText(item){
