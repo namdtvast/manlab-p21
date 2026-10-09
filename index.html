@@ -539,8 +539,14 @@
   }
 
   /* ---------- Gate G1–G7 (Mục 9.1 — kiểm tra tự động khi Lập kế hoạch) ---------- */
-  function gateCheck(item){
+  function gateCheck(item,loai){
     var reasons=[],isHC=item.dichVu==="HC";
+    if(loai==="QTMT"){
+      var q1=item.dichVu==="QTMT";if(!q1)reasons.push("Chỉ lấy đối tượng có Dịch vụ = Quan trắc");
+      var q2=!!String(item.linhVuc||"").trim();if(!q2)reasons.push("Chưa có Lĩnh vực");
+      var q3=!!String(item.quyTrinh||"").trim();if(!q3)reasons.push("Chưa có Tên quy trình");
+      return {pass:q1&&q2&&q3,reasons:reasons};
+    }
     var approvedStates=["Đã duyệt","ĐN LĐV duyệt"]; // đối tượng đã qua duyệt/đề nghị Lãnh đạo Viện duyệt
     var g1=approvedStates.indexOf(item.trangThaiPTD)>-1; if(!g1)reasons.push("G1: PTĐ chưa được duyệt (hiện: "+(item.trangThaiPTD||"—")+")");
     var g3=!!item.quyTrinh; if(!g3)reasons.push("G3: Chưa liên kết quy trình thực hiện");
@@ -568,6 +574,9 @@
     if(c)return c;
     c=naturalViCollator.compare(String(a.item.quyTrinh||""),String(b.item.quyTrinh||""));
     return c||a.idx-b.idx;
+  }
+  function catalogSearchText(item){
+    return [item.ten,item.dichVu,item.dichVuGoc,item.linhVuc,item.phamVi,item.quyTrinh].join(" ").toLowerCase();
   }
 
   /* ---------- Line schemas ---------- */
@@ -765,12 +774,12 @@
 
   function catalogPicker(r){
     var q=state.pickerQ.toLowerCase();
-    var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item)};})
+    var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item,r.loai)};})
       .filter(function(x){
         if(isExcludedNtpService(x.item))return false;
         if(r.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false; // Hồ sơ QTMT chỉ lấy Đối tượng có Dịch vụ = QTMT (Quan trắc)
         if(r.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false; // Hồ sơ Đo lường chỉ lấy dịch vụ đo lường
-        if(!q)return true;return (x.item.ten+" "+x.item.linhVuc).toLowerCase().indexOf(q)>-1;})
+        if(!q)return true;return catalogSearchText(x.item).indexOf(q)>-1;})
       .sort(compareCatalogRows);
     var pass=scored.filter(function(x){return x.gc.pass;});
     var fail=scored.filter(function(x){return !x.gc.pass;});
@@ -783,7 +792,7 @@
       '<button class="mlbtn" data-action="mlupdate">⟳ Cập nhật từ ManLab</button>'+
       '<button class="btn sm ghost" data-action="closepicker">Đóng</button></div>'+
       '<div class="prow" style="margin-bottom:.3rem"><span class="ml-status" id="mlStatus">Nguồn: '+esc(srcLbl)+'</span></div>'+
-      '<div class="prow"><input type="text" id="pickerq" placeholder="Tìm theo tên / lĩnh vực..." value="'+esc(state.pickerQ)+'"></div>'+
+      '<div class="prow"><input type="text" id="pickerq" placeholder="Tìm theo tên / dịch vụ / lĩnh vực / quy trình..." value="'+esc(state.pickerQ)+'"></div>'+
       '<div class="picker-toolbar">'+
         '<label class="selall-label" title="Chọn tất cả ('+pass.length+' đủ điều kiện)"><input type="checkbox" data-action="selall" '+(allChecked?"checked":"")+'> <span class="selall-text">Chọn tất cả ('+pass.length+' đủ điều kiện)</span></label>'+
         '<span class="spacer"></span>'+
@@ -792,15 +801,15 @@
       '</div>'+
       '';
     h+=pickerTable(pass,true);
-    h+='<p style="margin-top:.6rem"><button class="picktoggle" data-action="togglefail">'+(state.pickerShowFail?"Ẩn":"Hiện")+' '+fail.length+' PTĐ chưa đủ điều kiện (LK4)</button></p>';
+    h+='<p style="margin-top:.6rem"><button class="picktoggle" data-action="togglefail">'+(state.pickerShowFail?"Ẩn":"Hiện")+' '+fail.length+' '+(r.loai==="QTMT"?"đối tượng QTMT":"PTĐ")+' chưa đủ điều kiện (LK4)</button></p>';
     if(state.pickerShowFail)h+=pickerTable(fail,false);
     h+='</div>';
     return h;
   }
   function pickerTable(list,ok){
-    if(!list.length)return '<p class="subnote">'+(ok?"Không có PTĐ đủ điều kiện khớp tìm kiếm.":"Không có PTĐ chưa đủ điều kiện.")+'</p>';
-    var cols=["","Tên phương tiện đo","Lĩnh vực","Phạm vi áp dụng quy trình","Sai số cho phép (MPE)","Quy trình (ký hiệu — tên)","Người thực hiện mặc định",""];
-    var widths=["36px","210px","120px","150px","150px","160px","160px","82px"];
+    if(!list.length)return '<p class="subnote">'+(ok?"Không có đối tượng đủ điều kiện khớp tìm kiếm.":"Không có đối tượng chưa đủ điều kiện.")+'</p>';
+    var cols=["","Tên phương tiện đo","Dịch vụ","Lĩnh vực","Phạm vi áp dụng quy trình","Sai số cho phép (MPE)","Quy trình (ký hiệu — tên)","Người thực hiện mặc định",""];
+    var widths=["36px","200px","78px","115px","145px","140px","155px","150px","82px"];
     var h='<div class="ptab-wrap"><table class="ptbl"><colgroup>'+
       widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>'+
       cols.map(function(c){return "<th>"+c+"</th>";}).join("")+'</tr></thead><tbody>';
@@ -815,6 +824,7 @@
     var h='<tr class="'+(ok?"":"fail")+'">'+
       '<td class="pcell-chk">'+chk+'</td>'+
       '<td class="pname">'+esc(item.ten)+'</td>'+
+      '<td>'+esc(item.dichVu||"—")+'</td>'+
       '<td>'+esc(item.linhVuc)+'</td>'+
       '<td>'+esc(item.phamVi||"—")+'</td>'+
       '<td>'+esc(cap||"—")+'</td>'+
@@ -822,7 +832,7 @@
       '<td>'+esc(item.nguoiThucHien||"—")+'</td>'+
       '<td class="pcell-act">'+act+'</td>'+
     '</tr>';
-    if(!ok&&reasons&&reasons.length)h+='<tr class="fail greason-row"><td></td><td colspan="7"><div class="greason">'+reasons.map(esc).join("<br>")+'</div></td></tr>';
+    if(!ok&&reasons&&reasons.length)h+='<tr class="fail greason-row"><td></td><td colspan="8"><div class="greason">'+reasons.map(esc).join("<br>")+'</div></td></tr>';
     return h;
   }
   function addCatalogItem(r,item){
@@ -1225,8 +1235,8 @@
     if(t.dataset.goto!=null){e.preventDefault();gotoLine(+t.dataset.goto);return;}
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();var rSel=cur();
-      var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item)};})
-        .filter(function(x){if(isExcludedNtpService(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;var searchStr=(x.item.ten+" "+x.item.linhVuc+" "+x.item.dichVu+" "+(x.item.phamVi||"")).toLowerCase();return x.gc.pass&&(!q||searchStr.indexOf(q)>-1);});
+      var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item,rSel&&rSel.loai)};})
+        .filter(function(x){if(isExcludedNtpService(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;return x.gc.pass&&(!q||catalogSearchText(x.item).indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
@@ -1235,7 +1245,7 @@
       var r=cur();var ids=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];});
       if(!ids.length)return;
       var added=0;
-      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isExcludedNtpService(item)&&gateCheck(item).pass){addCatalogItem(r,item);added++;}});
+      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isExcludedNtpService(item)&&gateCheck(item,r.loai).pass){addCatalogItem(r,item);added++;}});
       state.pickSel={};state.pickerFor=null;save();renderMain();
       if(added)setTimeout(function(){alert("Đã thêm "+added+" đối tượng vào hồ sơ.");},50);
       return;
@@ -1252,7 +1262,7 @@
       return;
     }
     if(t.dataset.pick!=null){
-      var r=cur();var item=CATALOG[+t.dataset.pick];var gc=gateCheck(item);
+      var r=cur();var item=CATALOG[+t.dataset.pick];var gc=gateCheck(item,r.loai);
       if(isExcludedNtpService(item)){alert("Không thể chọn đối tượng thuộc nhóm dịch vụ NTP (nhà thầu phụ).");return;}
       if(!gc.pass){alert("Đối tượng (PTĐ) này chưa đủ điều kiện:\n"+gc.reasons.join("\n"));return;}
       addCatalogItem(r,item);state.pickerFor=null;state.pickSel={};save();renderMain();
