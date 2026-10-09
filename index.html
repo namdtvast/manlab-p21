@@ -587,6 +587,12 @@
     // Dữ liệu nhúng cũ chưa lưu DichVu gốc; chỉ fallback theo đúng 7 mã ở đầu ký hiệu quy trình.
     return !item.dichVuGoc&&/^NTP\s*\((KĐ|HC|TN|QT|KĐAT|RA|VC)\)(?:\s|$)/i.test(String(item.quyTrinh||""));
   }
+  function isExcludedField(item){
+    return normalizedSortText(item&&item.linhVuc).toLocaleLowerCase("vi")==="giải ngân";
+  }
+  function isExcludedCatalogItem(item){
+    return isExcludedNtpService(item)||isExcludedField(item);
+  }
   function compareCatalogRows(a,b){
     var order={"KĐ":0,"KĐTN":1,"HC":2,"TN":3,"QTMT":4};
     var da=order[a.item.dichVu];if(da===undefined)da=99;
@@ -796,7 +802,7 @@
     var q=state.pickerQ.toLowerCase();
     var scored=CATALOG.map(function(item,idx){return {item:item,idx:idx,gc:gateCheck(item,r.loai)};})
       .filter(function(x){
-        if(isExcludedNtpService(x.item))return false;
+        if(isExcludedCatalogItem(x.item))return false;
         if(r.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false; // Hồ sơ QTMT chỉ lấy Đối tượng có Dịch vụ = QTMT (Quan trắc)
         if(r.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false; // Hồ sơ Đo lường chỉ lấy dịch vụ đo lường
         if(!q)return true;return catalogSearchText(x.item).indexOf(q)>-1;})
@@ -1258,7 +1264,7 @@
     if(t.dataset.action==="selall"){
       var q=state.pickerQ.toLowerCase();var rSel=cur();
       var pass=CATALOG.map(function(item,idx){return {idx:idx,item:item,gc:gateCheck(item,rSel&&rSel.loai)};})
-        .filter(function(x){if(isExcludedNtpService(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;return x.gc.pass&&(!q||catalogSearchText(x.item).indexOf(q)>-1);});
+        .filter(function(x){if(isExcludedCatalogItem(x.item))return false;if(rSel&&rSel.loai==="QTMT"&&x.item.dichVu!=="QTMT")return false;if(rSel&&rSel.loai==="DL"&&DL_SERVICES.indexOf(x.item.dichVu)<0)return false;return x.gc.pass&&(!q||catalogSearchText(x.item).indexOf(q)>-1);});
       var makeAll=!pass.every(function(x){return state.pickSel[x.idx];});
       pass.forEach(function(x){state.pickSel[x.idx]=makeAll;});
       renderMain();return;
@@ -1267,7 +1273,7 @@
       var r=cur();var ids=Object.keys(state.pickSel).filter(function(k){return state.pickSel[k];});
       if(!ids.length)return;
       var added=0;
-      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isExcludedNtpService(item)&&gateCheck(item,r.loai).pass){addCatalogItem(r,item);added++;}});
+      ids.forEach(function(k){var item=CATALOG[+k];if(item&&!isExcludedCatalogItem(item)&&gateCheck(item,r.loai).pass){addCatalogItem(r,item);added++;}});
       state.pickSel={};state.pickerFor=null;save();renderMain();
       if(added)setTimeout(function(){alert("Đã thêm "+added+" đối tượng vào hồ sơ.");},50);
       return;
@@ -1286,6 +1292,7 @@
     if(t.dataset.pick!=null){
       var r=cur();var item=CATALOG[+t.dataset.pick];var gc=gateCheck(item,r.loai);
       if(isExcludedNtpService(item)){alert("Không thể chọn đối tượng thuộc nhóm dịch vụ NTP (nhà thầu phụ).");return;}
+      if(isExcludedField(item)){alert("Không thể chọn đối tượng có Lĩnh vực = Giải ngân.");return;}
       if(!gc.pass){alert("Đối tượng (PTĐ) này chưa đủ điều kiện:\n"+gc.reasons.join("\n"));return;}
       addCatalogItem(r,item);state.pickerFor=null;state.pickSel={};save();renderMain();
       return;
