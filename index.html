@@ -812,7 +812,7 @@
   }
   function pickerTable(list,ok){
     if(!list.length)return '<p class="subnote">'+(ok?"Không có đối tượng đủ điều kiện khớp tìm kiếm.":"Không có đối tượng chưa đủ điều kiện.")+'</p>';
-    var cols=["","Tên phương tiện đo","Dịch vụ","Lĩnh vực","Phạm vi áp dụng quy trình","Sai số cho phép (MPE)","Quy trình (ký hiệu — tên)","Người thực hiện mặc định",""];
+    var cols=["","Tên phương tiện đo","Dịch vụ","Lĩnh vực","Phạm vi áp dụng quy trình","Sai số cho phép (MPE)","Quy trình (tên — ký hiệu)","Người thực hiện mặc định",""];
     var widths=["36px","200px","78px","115px","145px","140px","155px","150px","82px"];
     var h='<div class="ptab-wrap"><table class="ptbl"><colgroup>'+
       widths.map(function(w){return '<col style="width:'+w+'">';}).join("")+'</colgroup><thead><tr>'+
@@ -1468,9 +1468,16 @@
       l.dichVu=l.dichVu||"thunghiem";
       if(l.ghiChu===undefined)l.ghiChu="";
     }
-    // Dòng liên kết từ API cũ lưu "Ký hiệu — Tên"; chuẩn hóa sang "Tên (Ký hiệu)" cho cả TB và CB.
-    if(l&&l.linked&&!l.quyTrinhKyHieu&&String(l.quyTrinh||"").indexOf(" — ")>-1){
-      var parts=String(l.quyTrinh).split(" — "),kyHieu=parts.shift().trim(),ten=parts.join(" — ").trim();
+    // Dòng liên kết từ API cũ có thể lưu "Ký hiệu — Tên" hoặc "Ký hiệu (Tên)".
+    // Chuẩn hóa cả hai dạng sang "Tên (Ký hiệu)" cho bảng TB và CB.
+    if(l&&l.linked&&!l.quyTrinhKyHieu){
+      var old=String(l.quyTrinh||""),kyHieu="",ten="";
+      if(old.indexOf(" — ")>-1){
+        var parts=old.split(" — ");kyHieu=parts.shift().trim();ten=parts.join(" — ").trim();
+      }else{
+        var legacy=old.match(/^((?:ĐLVN|ETV\.?|TCVN|QTKĐ|QTHC|QTTN|ISO|ASTM|US EPA|SMEWW)\s*[^()]*)\s*\(([\s\S]+)\)$/i);
+        if(legacy){kyHieu=legacy[1].trim();ten=legacy[2].trim();}
+      }
       if(kyHieu&&ten){l.quyTrinhKyHieu=kyHieu;l.quyTrinhTen=ten;l.quyTrinh=ten+" ("+kyHieu+")";}
     }
     return l;
